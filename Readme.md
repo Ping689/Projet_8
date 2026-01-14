@@ -1,70 +1,77 @@
-# Projet_8 - Pipeline de Données Météorologiques
+# Projet 8 - Pipeline de Données Météorologiques
 
-Ce projet met en place un pipeline pour collecter, transformer et unifier des données météorologiques issues de différentes sources pour l'entreprise GreenAndCoop.
+Ce projet met en place un pipeline de données pour GreenAndCoop. Le processus complet implique une étape de pré-traitement locale, une synchronisation via Airbyte (implicite), puis un pipeline de transformation qui télécharge les données depuis S3 pour les préparer à être stockées dans MongoDB.
 
-Le script principal, `transformation.py`, est conçu pour traiter des données de formats hétérogènes (Excel et JSONL) et produire un fichier JSON unique, propre et prêt à être stocké dans MongoDB.
+## Logique du Pipeline
 
-## Logique de transformation du script `transformation.py`
+Le processus se déroule en plusieurs scripts :
 
-Le script opère en plusieurs étapes clés pour garantir une sortie de données de haute qualité.
+1.  **`convert_excel.py` (Pré-traitement)**
+    Ce script convertit les données sources depuis des fichiers Excel en fichiers JSON. Il crée une colonne `timestamp` complète en combinant la date (du nom de la feuille) et l'heure.
+    *Cette étape est manuelle et doit être exécutée si les fichiers Excel changent.*
 
-### 1. Double Logique de Lecture des Sources
+2.  **`transformation_parquet.py` (Transformation)**
+    Ce script récupère les données depuis S3 (après synchronisation Airbyte), les nettoie, les transforme, et les unifie en un seul fichier JSON (`data_for_mongodb.json`).
+    *Cette étape est également considérée comme faisant partie de la préparation des données avant la migration.*
 
-Le script utilise deux méthodes distinctes pour lire les données en fonction de leur source d'origine :
+3.  **`migrate_to_mongodb.py` (Migration)**
+    Ce script prend le fichier JSON final et l'importe dans la base de données MongoDB. Il est conçu pour être exécuté dans un conteneur Docker.
 
-#### a) Fichiers Excel (Sources Weather Underground)
-- **Fichiers cibles** : `ichtegem_weather.xlsx` et `la_madeleine_weather.xlsx`.
-- **Processus** : Le script parcourt chaque fichier Excel et lit chacune des feuilles de calcul. La date est extraite directement du nom de chaque feuille (ex: '011024'). Cette date est ensuite combinée avec l'heure de la colonne `Time` pour reconstituer un timestamp complet et précis pour chaque mesure.
+## Migration via Docker
 
-#### b) Fichiers JSONL (Source Infoclimat)
-- **Fichiers cibles** : Tous les fichiers se terminant par `.jsonl` dans le dossier `temp_data`.
-- **Processus** : Le script lit ces fichiers ligne par ligne, en extrayant les données depuis la structure JSON complexe fournie par Airbyte (données contenues dans le champ `_airbyte_data`). Il est spécifiquement adapté pour traiter le format "Infoclimat" qui contient les données de plusieurs stations dans un seul fichier.
+Cette section explique comment exécuter la migration des données vers une base de données MongoDB en utilisant Docker Compose. Cela combine la migration et la conteneurisation.
 
-### 2. Fusion et Nettoyage
-Une fois toutes les données lues, elles sont fusionnées en une seule table. Ensuite, une étape cruciale de nettoyage et de normalisation (`clean_and_convert_data`) est appliquée :
-- **Standardisation des noms de colonnes** : Les noms sont convertis en `snake_case` pour la cohérence (ex: `"Dew Point"` devient `dew_point`).
-- **Extraction des valeurs numériques** : Le script extrait intelligemment les nombres à partir de chaînes de caractères contenant des unités (ex: `"8.2 mph"` devient le nombre `8.2`).
-- **Conversion des types** : Les colonnes sont converties dans des types de données appropriés (`float64` pour les nombres, `datetime64[ns]` pour le timestamp).
+### 1. Prérequis
+- **Docker et Docker Compose** 
+- **Données Transformées** : Le fichier `transformed_data/data_for_mongodb.json` 
 
-### 3. Tests de qualité et Sauvegarde
-- **Tests automatisés** : Des tests sont effectués sur le jeu de données final pour compter les valeurs manquantes et les doublons, fournissant un aperçu rapide de la qualité des données sources.
-- **Sauvegarde** : Le résultat final est sauvegardé dans le fichier `transformed_data/data_for_mongodb.json`, prêt pour l'importation dans MongoDB.
+### 2. Exécution de la Migration avec Docker
 
-## Comment fonctionne le script
-
-1.  **Prérequis** : Python
-                    Airbyte
-                    Bucket S3
-
-2.  **Structure des Fichiers** : Avant de lancer le script, vérifier que le dossier 
-`Projet_8` est structuré :
-    ```
-    Projet_8/
-    ├── ichtegem_weather.xlsx
-    ├── la_madeleine_weather.xlsx
-    ├── transformation.py
-    ├── requirements.txt
-    └── temp_data/
-        └── fichier_infoclimat.jsonl
-    ```
-
-3.  **Environnement Virtuel** : Il est fortement recommandé de travailler dans un environnement virtuel.
+1.  **Lancez Docker Compose** :
+    Ouvrez un terminal à la racine du projet et exécutez la commande suivante :
     ```bash
-    # Créer un environnement virtuel
-    py -m venv venv
-
-    # Activer l'environnement (Windows PowerShell)
-    .\venv\Scripts\Activate.ps1
+    docker-compose up --build
     ```
+    Cette commande va :
+    - **Construire l'image Docker** pour le script de migration en se basant sur le `Dockerfile`.
+    - **Télécharger l'image officielle de MongoDB**.
+    - **Démarrer deux conteneurs** : un pour la base de données (`mongodb`) et un pour le script (`migration-script`).
+    - Le script de migration attendra que la base de données soit prête, puis se connectera et importera les données.
 
-4.  **Installation des Dépendances** : Installez toutes les bibliothèques nécessaires.
+2.  **Vérification** :
+    - Les logs du conteneur `migration-script` afficheront le statut de la migration, y compris le nombre de documents insérés.
+    - Une fois la migration terminée, le conteneur du script s'arrêtera. Le conteneur MongoDB continuera de fonctionner.
+    - Vous pouvez vous connecter à la base de données sur `mongodb://localhost:27017` avec un outil comme MongoDB Compass pour vérifier que la collection `weather_stations` a bien été créée et remplie.
+
+3.  **Arrêter et nettoyer** :
+    Pour arrêter le conteneur MongoDB et supprimer le volume de données, exécutez :
     ```bash
-    pip install -r requirements.txt
+    docker-compose down -v
     ```
 
-5.  **Exécution** : Lancez simplement le script.
-    ```bash
-    py transformation.py
-    ```
+## Logigramme du Pipeline de Données
 
-6.  **Résultat** : Un fichier `data_for_mongodb.json` sera créé dans le dossier `transformed_data`.
+Voici une représentation du flux de données complet, de la source à la base de données finale.
+
+```mermaid
+graph TD
+    subgraph "Étape 1: Collecte et Transformation (Locale/Manuelle)"
+        A[Fichiers Excel (.xlsx)] --> B(convert_excel.py);
+        B --> C[Fichiers JSON (.json)];
+        D[Source Infoclimat (API)] --> E{Airbyte};
+        C --> E;
+        E -- Synchronisation --> F[Bucket S3 (Format Parquet)];
+        F --> G(transformation_parquet.py);
+        G --> H[Fichier JSON Transformé<br>(data_for_mongodb.json)];
+    end
+
+    subgraph "Étape 2 & 3: Migration Conteneurisée"
+        H -- Fichier lu par --> I(Conteneur<br>migration-script);
+        J[(Conteneur<br>MongoDB)];
+        I -- Insère les données dans --> J;
+    end
+
+    subgraph "Utilisateurs Finaux"
+        J --> K[Data Scientists / SageMaker];
+    end
+```

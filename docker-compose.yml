@@ -1,0 +1,29 @@
+services:
+  mongo:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - mongo-net
+
+  migration:
+    build: .
+    container_name: migration-script
+    depends_on:
+      - mongo
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/
+      - DB_NAME=greenandcoop
+      - COLLECTION_NAME=weather_stations
+    networks:
+      - mongo-net
+
+volumes:
+  mongo-data:
+
+networks:
+  mongo-net:
+    driver: bridge
