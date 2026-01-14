@@ -55,23 +55,23 @@ Voici une représentation du flux de données complet, de la source à la base d
 
 ```mermaid
 graph TD
-    subgraph "Étape 1: Collecte et Transformation (Locale/Manuelle)"
-        A[Fichiers Excel (.xlsx)] --> B(convert_excel.py);
-        B --> C[Fichiers JSON (.json)];
-        D[Source Infoclimat (API)] --> E{Airbyte};
+    subgraph "Etape 1 - Collecte et Transformation"
+        A["Fichiers Excel"] --> B["convert_excel.py"];
+        B --> C["Fichiers JSON"];
+        D["Source Infoclimat API"] --> E{Airbyte};
         C --> E;
-        E -- Synchronisation --> F[Bucket S3 (Format Parquet)];
-        F --> G(transformation_parquet.py);
-        G --> H[Fichier JSON Transformé<br>(data_for_mongodb.json)];
+        E -- Synchronisation --> F["Bucket S3 - Parquet"];
+        F --> G["transformation_parquet.py"];
+        G --> H["JSON Transforme"];
     end
 
-    subgraph "Étape 2 & 3: Migration Conteneurisée"
-        H -- Fichier lu par --> I(Conteneur<br>migration-script);
-        J[(Conteneur<br>MongoDB)];
-        I -- Insère les données dans --> J;
+    subgraph "Etape 2 et 3 - Migration Conteneurisee"
+        H -- Fichier lu par --> I["Conteneur script migration"];
+        J["Conteneur MongoDB"];
+        I -- Insere les donnees dans --> J;
     end
 
     subgraph "Utilisateurs Finaux"
-        J --> K[Data Scientists / SageMaker];
+        J --> K["Data Scientists / SageMaker"];
     end
 ```
