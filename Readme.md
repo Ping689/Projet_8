@@ -1,6 +1,6 @@
 # Projet 8 - Pipeline de Données Météorologiques
 
-Ce projet met en place un pipeline de données pour GreenAndCoop. Le processus complet implique une étape de pré-traitement locale, une synchronisation via Airbyte (implicite), puis un pipeline de transformation qui télécharge les données depuis S3 pour les préparer à être stockées dans MongoDB.
+Ce projet met en place un pipeline de données pour GreenAndCoop. Le processus complet implique une étape de pré-traitement locale, une synchronisation via Airbyte, puis un pipeline de transformation qui télécharge les données depuis S3 pour les préparer à être stockées dans MongoDB.
 
 ## Logique du Pipeline
 
@@ -8,11 +8,9 @@ Le processus se déroule en plusieurs scripts :
 
 1.  **`convert_excel.py` (Pré-traitement)**
     Ce script convertit les données sources depuis des fichiers Excel en fichiers JSON. Il crée une colonne `timestamp` complète en combinant la date (du nom de la feuille) et l'heure.
-    *Cette étape est manuelle et doit être exécutée si les fichiers Excel changent.*
 
 2.  **`transformation_parquet.py` (Transformation)**
     Ce script récupère les données depuis S3 (après synchronisation Airbyte), les nettoie, les transforme, et les unifie en un seul fichier JSON (`data_for_mongodb.json`).
-    *Cette étape est également considérée comme faisant partie de la préparation des données avant la migration.*
 
 3.  **`migrate_to_mongodb.py` (Migration)**
     Ce script prend le fichier JSON final et l'importe dans la base de données MongoDB. Il est conçu pour être exécuté dans un conteneur Docker.
