@@ -28,7 +28,7 @@ Cette section explique comment exécuter la migration des données vers une base
 ### 2. Exécution de la Migration avec Docker
 
 1.  **Lancez Docker Compose** :
-    Ouvrez un terminal à la racine du projet et exécutez la commande suivante :
+    Exécute la commande suivante :
     ```bash
     docker-compose up --build
     ```
@@ -41,13 +41,7 @@ Cette section explique comment exécuter la migration des données vers une base
 2.  **Vérification** :
     - Les logs du conteneur `migration-script` afficheront le statut de la migration, y compris le nombre de documents insérés.
     - Une fois la migration terminée, le conteneur du script s'arrêtera. Le conteneur MongoDB continuera de fonctionner.
-    - Vous pouvez vous connecter à la base de données sur `mongodb://localhost:27017` avec un outil comme MongoDB Compass pour vérifier que la collection `weather_stations` a bien été créée et remplie.
-
-3.  **Arrêter et nettoyer** :
-    Pour arrêter le conteneur MongoDB et supprimer le volume de données, exécutez :
-    ```bash
-    docker-compose down -v
-    ```
+    - Connecte à la base de données sur `mongodb://localhost:27017` via MongoDB Compass pour vérifier que la collection `weather_stations` a bien été créée et remplie.
 
 ## Logigramme du Pipeline de Données
 
@@ -65,7 +59,7 @@ graph TD
         G --> H["JSON Transforme"];
     end
 
-    subgraph "Migration Conteneurisee"
+    subgraph "Migration via docker"
         H -- Fichier lu par --> I["Conteneur script migration"];
         J["Conteneur MongoDB"];
         I -- Insere les donnees dans --> J;
