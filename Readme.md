@@ -55,7 +55,7 @@ Voici une représentation du flux de données complet, de la source à la base d
 
 ```mermaid
 graph TD
-    subgraph "Etape 1 - Collecte et Transformation"
+    subgraph "Collecte et Transformation"
         A["Fichiers Excel"] --> B["convert_excel.py"];
         B --> C["Fichiers JSON"];
         D["Source Infoclimat API"] --> E{Airbyte};
@@ -65,13 +65,13 @@ graph TD
         G --> H["JSON Transforme"];
     end
 
-    subgraph "Etape 2 et 3 - Migration Conteneurisee"
+    subgraph "Migration Conteneurisee"
         H -- Fichier lu par --> I["Conteneur script migration"];
         J["Conteneur MongoDB"];
         I -- Insere les donnees dans --> J;
     end
 
     subgraph "Utilisateurs Finaux"
-        J --> K["Data Scientists / SageMaker"];
+        J --> K["Data Scientists"];
     end
 ```
