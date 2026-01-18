@@ -4,16 +4,16 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 from datetime import datetime, timedelta
 
-# --- Configuration du Logging ---
+# Configuration du Logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler() # Affiche les logs dans la console
+        logging.StreamHandler() 
     ]
 )
 
-# --- Configuration de la Connexion ---
+# Configuration de la Connexion 
 MONGO_URI = "mongodb://13.60.208.12:27017/"
 DB_NAME = "greenandcoop"
 COLLECTION_NAME = "weather_stations"
@@ -33,7 +33,7 @@ def test_database_latency():
         db = client[DB_NAME]
         collection = db[COLLECTION_NAME]
 
-        # --- Étape 1: Trouver une date valide ---
+        # Trouver une date valide
         logging.info("Recherche d'un document avec un timestamp valide...")
         station_to_find = "La Madeleine"
         sample_document = collection.find_one({
@@ -63,7 +63,7 @@ def test_database_latency():
         
         logging.info(f"Date valide trouvée. Test sur la journée du {start_date.strftime('%Y-%m-%d')}")
 
-        # --- Étape 2: Exécuter la requête de performance ---
+        # Exécuter la requête de performance
         query = {
             "station_name": station_to_find,
             "timestamp": {
@@ -83,7 +83,6 @@ def test_database_latency():
         logging.info("--- Résultats du Test ---")
         logging.info(f"Nombre de documents trouvés : {len(documents)}")
         logging.info(f"Temps d'exécution de la requête : {duration_ms:.2f} ms")
-        logging.info("-------------------------")
 
     except ConnectionFailure as e:
         logging.error("Impossible de se connecter à MongoDB.", exc_info=True)
