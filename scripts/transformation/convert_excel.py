@@ -2,13 +2,24 @@ import pandas as pd
 import os
 import json
 from datetime import datetime
+import logging
+
+# Configuration du logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("convert_excel.log"),
+        logging.StreamHandler()
+    ]
+)
 
 def convert_excel_to_json():
     """
     Lit les fichiers Excel spécifiés, traite chaque feuille comme une date distincte,
     et sauvegarde les données consolidées dans des fichiers JSON correspondants.
     """
-    print("Démarrage de la conversion Excel vers JSON")
+    logging.info("Démarrage de la conversion Excel vers JSON")
 
     excel_files = ["ichtegem_weather.xlsx", "la_madeleine_weather.xlsx"]
     output_path = '.' # Sauvegarde dans le répertoire courant
@@ -17,10 +28,10 @@ def convert_excel_to_json():
         file_path = os.path.join(output_path, filename)
         
         if not os.path.exists(file_path):
-            print(f"AVERTISSEMENT: Fichier {filename} non trouvé. Il est ignoré.")
+            logging.warning(f"Fichier {filename} non trouvé. Il est ignoré.")
             continue
 
-        print(f"Traitement du fichier : {filename}...")
+        logging.info(f"Traitement du fichier : {filename}...")
         
         all_records_for_file = []
         xls = pd.ExcelFile(file_path)
@@ -48,17 +59,17 @@ def convert_excel_to_json():
                     all_records_for_file.append(record)
 
             except Exception as e:
-                print(f"  - Erreur lors du traitement de la feuille '{sheet_name}': {e}")
+                logging.error(f"Erreur lors du traitement de la feuille '{sheet_name}'.", exc_info=True)
         
         # Sauvegarde du fichier JSON correspondant
         output_filename = os.path.splitext(filename)[0] + '.json'
         output_filepath = os.path.join(output_path, output_filename)
         
-        print(f"Sauvegarde des données dans : {output_filename}...")
+        logging.info(f"Sauvegarde des données dans : {output_filename}...")
         with open(output_filepath, 'w', encoding='utf-8') as f:
             json.dump(all_records_for_file, f, indent=4, ensure_ascii=False)
 
-    print("\nConversion terminée.")
+    logging.info("Conversion terminée.")
 
 
 if __name__ == '__main__':

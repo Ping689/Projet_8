@@ -5,6 +5,17 @@ import boto3
 from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
 from datetime import datetime
 import shutil
+import logging
+
+# Configuration du logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("transformation.log"),
+        logging.StreamHandler()
+    ]
+)
 
 # Configuration
 S3_BUCKET_NAME = 'bucket-s3-stations'
@@ -49,7 +60,7 @@ def download_from_s3_securise(bucket_name, s3_prefix, local_dir, extensions_auto
     source_name = s3_prefix.strip('/').split('/')[-1]
     source_local_dir = os.path.join(local_dir, source_name)
     
-    print(f"\nTéléchargement pour '{source_name}' depuis S3 : s3://{bucket_name}/{s3_prefix}")
+    logging.info(f"Téléchargement pour '{source_name}' depuis S3 : s3://{bucket_name}/{s3_prefix}")
     
     if not os.path.exists(source_local_dir):
         os.makedirs(source_local_dir)
@@ -68,20 +79,20 @@ def download_from_s3_securise(bucket_name, s3_prefix, local_dir, extensions_auto
                     continue
 
                 local_file_path = os.path.join(source_local_dir, os.path.basename(s3_key))
-                print(f"Téléchargement de {s3_key} vers {local_file_path}...")
+                logging.info(f"Téléchargement de {s3_key} vers {local_file_path}...")
                 s3_client.download_file(bucket_name, s3_key, local_file_path)
         
-        print(f"Téléchargement pour '{source_name}' terminé")
+        logging.info(f"Téléchargement pour '{source_name}' terminé")
         return True
 
     except (NoCredentialsError, PartialCredentialsError):
-        print("ERREUR: Credentials AWS non configurés.")
+        logging.error("Credentials AWS non configurés.", exc_info=True)
         return False
     except ClientError as e:
-        print(f"ERREUR S3 inattendue : {e}")
+        logging.error(f"Erreur S3 inattendue : {e}", exc_info=True)
         return False
     except Exception as e:
-        print(f"Une erreur est survenue lors du téléchargement : {e}")
+        logging.error(f"Une erreur est survenue lors du téléchargement.", exc_info=True)
         return False
 
 def transform_station_parquet(data_path, station_meta):
@@ -89,9 +100,9 @@ def transform_station_parquet(data_path, station_meta):
     Transforme les fichiers Parquet d'une station, en aplatissant les colonnes objet
     et en utilisant la colonne 'timestamp' existante.
     """
-    print(f"\nTraitement des données Parquet pour la station : {station_meta['station_name']}")
+    logging.info(f"Traitement des données Parquet pour la station : {station_meta['station_name']}")
     if not os.path.exists(data_path) or not os.listdir(data_path):
-        print(f"AVERTISSEMENT: Le dossier {data_path} est vide ou n'existe pas.")
+        logging.warning(f"Le dossier {data_path} est vide ou n'existe pas.")
         return pd.DataFrame()
 
     df = pd.read_parquet(data_path)
@@ -102,7 +113,7 @@ def transform_station_parquet(data_path, station_meta):
             # Vérifie si le premier élément non nul est un dictionnaire contenant la clé 'string'
             first_valid = df[col].dropna().iloc[0] if not df[col].dropna().empty else None
             if isinstance(first_valid, dict) and 'string' in first_valid:
-                print(f"Aplatissement de la colonne '{col}'...")
+                logging.info(f"Aplatissement de la colonne '{col}'...")
                 df[col] = df[col].apply(lambda x: x.get('string') if isinstance(x, dict) else x)
 
     df = df.assign(**station_meta)
@@ -116,9 +127,9 @@ def transform_infoclimat_parquet(data_path):
     """
     Transforme les fichiers Parquet de la source Infoclimat, qu'ils soient imbriqués ou non.
     """
-    print("\nTraitement des données Parquet pour Infoclimat")
+    logging.info("Traitement des données Parquet pour Infoclimat")
     if not os.path.exists(data_path) or not os.listdir(data_path):
-        print(f"AVERTISSEMENT: Le dossier {data_path} est vide ou n'existe pas.")
+        logging.warning(f"Le dossier {data_path} est vide ou n'existe pas.")
         return pd.DataFrame()
 
     df = pd.read_parquet(data_path)
@@ -127,12 +138,12 @@ def transform_infoclimat_parquet(data_path):
         source_df = df
         # Si les données sont imbriquées dans _airbyte_data, on les normalise
         if '_airbyte_data' in df.columns:
-            print("Données trouvées dans '_airbyte_data', normalisation...")
+            logging.info("Données trouvées dans '_airbyte_data', normalisation...")
             source_df = pd.json_normalize(df['_airbyte_data'].apply(json.loads))
 
         # Si les données (maintenant dans source_df) sont encore imbriquées (format Infoclimat)
         if 'hourly' in source_df.columns:
-            print("Structure 'hourly' détectée, aplatissement des enregistrements...")
+            logging.info("Structure 'hourly' détectée, aplatissement des enregistrements...")
             exploded_records = []
             for _, row in source_df.iterrows():
                 stations = {s['id']: s for s in row.get('stations', []) if isinstance(s, dict)}
@@ -163,7 +174,7 @@ def transform_infoclimat_parquet(data_path):
             df = pd.DataFrame(exploded_records)
         else:
             # Si 'hourly' n'est pas là, on utilise le dataframe source tel quel
-            print("Structure 'hourly' non détectée, utilisation des données aplaties.")
+            logging.info("Structure 'hourly' non détectée, utilisation des données aplaties.")
             df = source_df
 
         cols_to_drop = [col for col in df.columns if col.startswith('_airbyte')]
@@ -171,22 +182,22 @@ def transform_infoclimat_parquet(data_path):
         return df
 
     except Exception as e:
-        print(f"Erreur critique lors de la transformation des données Infoclimat : {e}")
+        logging.error("Erreur critique lors de la transformation des données Infoclimat.", exc_info=True)
         return pd.DataFrame()
 
 # Fonctions Utilitaires
 
 def test_data_quality(df, source_name):
     """Effectue des tests de qualité sur le DataFrame."""
-    print(f"\nTest de qualité pour {source_name}")
+    logging.info(f"Test de qualité pour {source_name}")
     if df.empty:
-        print("Le DataFrame est vide.")
+        logging.warning("Le DataFrame est vide.")
         return
-    print(f"OK: {len(df)} lignes trouvées.")
+    logging.info(f"OK: {len(df)} lignes trouvées.")
     
     if df.isnull().values.any():
-        print("Alerte: Valeurs manquantes détectées.")
-        print(df.isnull().sum()[df.isnull().sum() > 0])
+        logging.warning("Alerte: Valeurs manquantes détectées.")
+        logging.warning(df.isnull().sum()[df.isnull().sum() > 0])
     
     df_for_duplicates_test = df.copy()
     unhashable_cols = []
@@ -195,19 +206,19 @@ def test_data_quality(df, source_name):
             unhashable_cols.append(col)
 
     if unhashable_cols:
-        print(f"AVERTISSEMENT: Les colonnes suivantes contiennent des objets non 'hashables' et seront ignorées pour le test de doublons: {unhashable_cols}")
+        logging.warning(f"Les colonnes suivantes contiennent des objets non 'hashables' et seront ignorées pour le test de doublons: {unhashable_cols}")
         df_for_duplicates_test = df_for_duplicates_test.drop(columns=unhashable_cols)
 
     if df_for_duplicates_test.duplicated().any():
-        print(f"Alerte: {df_for_duplicates_test.duplicated().sum()} doublons détectés.")
+        logging.warning(f"Alerte: {df_for_duplicates_test.duplicated().sum()} doublons détectés.")
     else:
-        print("OK: Aucun doublon détecté.")
+        logging.info("OK: Aucun doublon détecté.")
         
-    print("Fin du test de qualité\n")
+    logging.info(f"Fin du test de qualité pour {source_name}")
 
 def clean_and_convert_data(df):
     """Nettoie, convertit les types et normalise les colonnes."""
-    print("\nNettoyage et conversion des types de données")
+    logging.info("Nettoyage et conversion des types de données")
     rename_map = {
         'Dew Point': 'dew_point', 'Precip. Rate.': 'precip_rate', 'Precip. Accum.': 'precip_accum',
         'Speed': 'speed', 'Gust': 'gust', 'Pressure': 'pressure', 'UV': 'uv', 'Humidity': 'humidity',
@@ -227,7 +238,7 @@ def clean_and_convert_data(df):
     if 'timestamp' in df.columns:
         # Pandas peut inférer automatiquement le format pour les chaînes ISO 8601
         df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
-    print("Conversion terminée.")
+    logging.info("Conversion terminée.")
     return df
 
 # FONCTION PRINCIPALE 
@@ -240,12 +251,12 @@ def main():
     if os.path.exists(LOCAL_DOWNLOAD_PATH): shutil.rmtree(LOCAL_DOWNLOAD_PATH)
     if os.path.exists(TRANSFORMED_OUTPUT_PATH): shutil.rmtree(TRANSFORMED_OUTPUT_PATH)
     os.makedirs(LOCAL_DOWNLOAD_PATH); os.makedirs(TRANSFORMED_OUTPUT_PATH)
-    print("Répertoires locaux nettoyés.")
+    logging.info("Répertoires locaux nettoyés.")
 
     s3_sources = [S3_PREFIX_INFOCLIMAT, S3_PREFIX_ICHTEGEM_WEATHER, S3_PREFIX_LA_MADELEINE_WEATHER]
     for prefix in s3_sources:
         if not download_from_s3_securise(S3_BUCKET_NAME, prefix, LOCAL_DOWNLOAD_PATH, extensions_autorisees=['.parquet']):
-            print(f"Échec du téléchargement pour {prefix}. Arrêt du script."); return
+            logging.error(f"Échec du téléchargement pour {prefix}. Arrêt du script."); return
 
     df_infoclimat = transform_infoclimat_parquet(os.path.join(LOCAL_DOWNLOAD_PATH, 'infoclimat'))
     df_ichtegem = transform_station_parquet(os.path.join(LOCAL_DOWNLOAD_PATH, 'ichtegem_weather'), STATION_METADATA["IICHTE19"])
@@ -254,10 +265,10 @@ def main():
     all_dfs = [df for df in [df_infoclimat, df_ichtegem, df_la_madeleine] if not df.empty]
     
     if not all_dfs:
-        print("Aucune donnée n'a été transformée. Vérifiez les fichiers Parquet dans S3."); return
+        logging.warning("Aucune donnée n'a été transformée. Vérifiez les fichiers Parquet dans S3."); return
 
     final_df = pd.concat(all_dfs, ignore_index=True)
-    print(f"\nTransformation terminée. {len(final_df)} enregistrements combinés.")
+    logging.info(f"Transformation terminée. {len(final_df)} enregistrements combinés.")
     
     final_df = final_df.drop(columns=['Time'], errors='ignore')
     final_df = clean_and_convert_data(final_df)
@@ -265,7 +276,7 @@ def main():
 
     output_file = os.path.join(TRANSFORMED_OUTPUT_PATH, 'data_for_mongodb.json')
     final_df.to_json(output_file, orient='records', indent=4, force_ascii=False, date_format='iso')
-    print(f"Résultat sauvegardé dans {output_file}")
+    logging.info(f"Résultat sauvegardé dans {output_file}")
 
 if __name__ == '__main__':
     main()
